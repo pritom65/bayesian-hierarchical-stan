@@ -1,0 +1,1213 @@
+---
+title: "Bayesian modelling workbook in Stan"
+author: "Nishith Ranjon Roy (Pritom)"
+format: pdf
+---
+
+```{r}
+library(tidyverse)
+```
+
+```{r}
+set.seed(42)
+
+# True response rate (unknown to the analyst)
+theta_true <- 0.35
+
+# Data
+n <- 30
+y <- rbinom(n, size = 1, prob = theta_true)
+
+# Summarise
+cat("n =", n, "\n")
+cat("Successes =", sum(y), "\n")
+cat("MLE of theta =", mean(y), "\n")
+
+# Package for Stan
+data_list <- list(
+  n = n,
+  y = y,
+  prms_alpha = 1,
+  prms_beta = 1
+)
+```
+
+
+
+```{r}
+library(cmdstanr)
+
+# Compile
+model <- cmdstan_model("stan/beta_binom.stan")
+
+# Fit
+fit <- model$sample(
+  data    = data_list,
+  chains  = 4,
+  parallel_chains = 4,
+  iter_warmup   = 1000,
+  iter_sampling = 1000,
+  seed    = 42
+)
+
+# Check convergence first — always before looking at results
+fit$cmdstan_diagnose()
+
+# Posterior summaries
+fit$summary(variables = c("theta", "y_rep", "above_threshold"))
+
+# Extract draws for plotting
+library(posterior)
+library(ggplot2)
+
+draws <- fit$draws("theta", format = "df")
+
+ggplot(draws, aes(x = theta)) +
+  geom_histogram(aes(y = ..density..), bins = 60, fill = "steelblue", alpha = 0.7) +
+  geom_vline(xintercept = mean(y), color = "red", linetype = "dashed", linewidth = 1) +
+  labs(title = "Posterior distribution of theta",
+       subtitle = "Red dashed = MLE",
+       x = expression(theta), y = "Density")
+```
+
+
+```{r}
+data_list <- list(
+  n = n,
+  y = y,
+  prms_alpha = 3,
+  prms_beta = 7
+)
+```
+
+
+```{r}
+# Compile
+model <- cmdstan_model("stan/beta_binom.stan")
+
+# Fit
+fit <- model$sample(
+  data    = data_list,
+  chains  = 4,
+  parallel_chains = 4,
+  iter_warmup   = 1000,
+  iter_sampling = 1000,
+  seed    = 42
+)
+
+# Check convergence first — always before looking at results
+fit$cmdstan_diagnose()
+
+# Posterior summaries
+fit$summary(variables = c("theta", "y_rep", "above_threshold"))
+
+# Extract draws for plotting
+draws <- fit$draws("theta", format = "df")
+
+ggplot(draws, aes(x = theta)) +
+  geom_histogram(aes(y = ..density..), bins = 60, fill = "steelblue", alpha = 0.7) +
+  geom_vline(xintercept = mean(y), color = "red", linetype = "dashed", linewidth = 1) +
+  labs(title = "Posterior distribution of theta",
+       subtitle = "Red dashed = MLE",
+       x = expression(theta), y = "Density")
+```
+
+```{r}
+data_list <- list(
+  n = n,
+  y = y,
+  prms_alpha = 15,
+  prms_beta = 35
+)
+
+# Fit
+fit <- model$sample(
+  data    = data_list,
+  chains  = 4,
+  parallel_chains = 4,
+  iter_warmup   = 1000,
+  iter_sampling = 1000,
+  seed    = 42
+)
+
+# Check convergence first — always before looking at results
+fit$cmdstan_diagnose()
+
+# Posterior summaries
+fit$summary(variables = c("theta", "y_rep", "above_threshold"))
+
+# Extract draws for plotting
+draws <- fit$draws("theta", format = "df")
+
+ggplot(draws, aes(x = theta)) +
+  geom_histogram(aes(y = ..density..), bins = 60, fill = "steelblue", alpha = 0.7) +
+  geom_vline(xintercept = mean(y), color = "red", linetype = "dashed", linewidth = 1) +
+  labs(title = "Posterior distribution of theta",
+       subtitle = "Red dashed = MLE",
+       x = expression(theta), y = "Density")
+```
+
+
+## Poisson Model
+
+```{r}
+set.seed(42)
+
+# True incidence rate (unknown to analyst)
+lambda_true <- 0.003  # 3 cases per 1000 person-years
+
+# Exposure
+t <- 5000  # person-years at risk
+
+# Observed cases
+y <- rpois(1, lambda = lambda_true * t)
+
+cat("Person-years at risk:", t, "\n")
+cat("Observed cases:", y, "\n")
+cat("MLE of lambda:", y/t, "\n")
+cat("MLE per 1000 person-years:", (y/t)*1000, "\n")
+
+data_list <- list(y = y, t = t, prms_alpha = 2, prms_beta = 500)
+```
+
+
+```{r}
+model <- cmdstan_model("stan/poisson_gama.stan")
+fit <- model$sample(data = data_list,
+                    chains = 4, 
+                    parallel_chains = 4,
+                    iter_warmup = 1000,
+                    iter_sampling = 1000,
+                    seed = 42)
+
+fit$cmdstan_diagnose()
+fit$summary(variables = c("lambda", "rate_per_1000", "y_rep", "above_threshold"))
+```
+
+
+```{r}
+draws <- fit$draws("rate_per_1000", format = "df")
+
+ggplot(draws, aes(x = rate_per_1000)) +
+  geom_histogram(aes(y = ..density..), bins = 60,
+                 fill = "steelblue", alpha = 0.7) +
+  geom_vline(xintercept = (y/t)*1000, color = "red",
+             linetype = "dashed", linewidth = 1) +
+  geom_vline(xintercept = 3, color = "black",
+             linetype = "dashed", linewidth = 1) +
+  labs(title = "Posterior: incidence rate per 1000 person-years",
+       subtitle = "Red = MLE | Black = true rate (3 per 1000)",
+       x = "Rate per 1000 person-years", y = "Density")
+```
+
+
+```{r}
+fit <- model$sample(data = list(y = y, t = t, prms_alpha = .2, prms_beta = 50),
+                    chains = 4, 
+                    parallel_chains = 4,
+                    iter_warmup = 1000,
+                    iter_sampling = 1000,
+                    seed = 42)
+
+
+fit$draws("rate_per_1000", format = "df") |> 
+  ggplot(aes(x = rate_per_1000)) +
+  geom_histogram(aes(y = ..density..), bins = 60,
+                 fill = "steelblue", alpha = 0.7) +
+  geom_vline(xintercept = (y/t)*1000, color = "red",
+             linetype = "dashed", linewidth = 1) +
+  geom_vline(xintercept = 3, color = "black",
+             linetype = "dashed", linewidth = 1) +
+  labs(title = "Posterior: incidence rate per 1000 person-years",
+       subtitle = "Red = MLE | Black = true rate (3 per 1000)",
+       x = "Rate per 1000 person-years", y = "Density")
+```
+
+
+
+```{r}
+fit <- model$sample(data = list(y = y, t = t, prms_alpha = 20, prms_beta = 5000),
+                    chains = 4, 
+                    parallel_chains = 4,
+                    iter_warmup = 1000,
+                    iter_sampling = 1000,
+                    seed = 42)
+
+
+fit$draws("rate_per_1000", format = "df") |> 
+  ggplot(aes(x = rate_per_1000)) +
+  geom_histogram(aes(y = ..density..), bins = 60,
+                 fill = "steelblue", alpha = 0.7) +
+  geom_vline(xintercept = (y/t)*1000, color = "red",
+             linetype = "dashed", linewidth = 1) +
+  geom_vline(xintercept = 3, color = "black",
+             linetype = "dashed", linewidth = 1) +
+  labs(title = "Posterior: incidence rate per 1000 person-years",
+       subtitle = "Red = MLE | Black = true rate (3 per 1000)",
+       x = "Rate per 1000 person-years", y = "Density")
+```
+
+
+## Part 2
+
+```{r}
+set.seed(42)
+
+lambda_true <- 0.003  # same true rate for all counties
+
+# Counties differ dramatically in population size
+counties <- data.frame(
+  county = c("A", "B", "C", "D", "E", "F"),
+  t      = c(500, 1000, 2000, 5000, 10000, 20000)  # person-years
+)
+
+counties$y         <- rpois(6, lambda = lambda_true * counties$t)
+counties$raw_rate  <- (counties$y / counties$t) * 1000  # per 1000 PY
+counties$expected  <- lambda_true * counties$t
+
+print(counties)
+
+# Notice: raw rates vary wildly for small counties
+# Package for Stan
+data_list2 <- list(
+  J          = nrow(counties),
+  y          = counties$y,
+  t          = counties$t,
+  prms_alpha = 2,
+  prms_beta  = 500
+)
+```
+```{r}
+model2 <- cmdstan_model("stan/poisson_gamma_pooled.stan")
+
+fit2 <- model2$sample(
+  data = data_list2,
+  chains = 4, parallel_chains = 4,
+  iter_warmup = 1000, iter_sampling = 1000,
+  seed = 42
+)
+
+fit2$cmdstan_diagnose()
+fit2$summary(variables = c("lambda", "rate_per_1000"))
+```
+
+
+
+
+```{r}
+# Pooled posterior draws
+fit2$draws("rate_per_1000", format = "df") |>
+  ggplot() +
+  geom_density(aes(x = rate_per_1000), fill = "steelblue", alpha = 0.5) +
+  # Raw county rates (points)
+  geom_point(data = counties,
+             aes(x = raw_rate, y = 0, size = t),
+             color = "red", alpha = 0.8) +
+  geom_text(data = counties,
+            aes(x = raw_rate, y = 0.05, label = county), size = 3) +
+  # True rate
+  geom_vline(xintercept = 3, linetype = "dashed", color = "black") +
+  scale_size_continuous(name = "Person-years") +
+  labs(title = "Pooled posterior vs. raw county rates",
+       subtitle = "Black dashed = true rate (3 per 1000) | Point size = county size",
+       x = "Rate per 1000 PY", y = "Density")
+```
+
+
+```{r}
+set.seed(42)
+n <- 50
+
+# True parameters (unknown to analyst)
+alpha_true <- 90    # baseline SBP at age 0 (intercept)
+beta_true  <- 0.6   # SBP increases 0.6 mmHg per year
+sigma_true <- 10    # residual SD
+
+age <- runif(n, min = 30, max = 80)
+sbp <- alpha_true + beta_true * age + rnorm(n, 0, sigma_true)
+
+# Frequentist benchmark
+lm_fit <- lm(sbp ~ age)
+summary(lm_fit)
+
+data_list <- list(N = n, age = age, sbp = sbp)
+```
+
+```{r}
+model <- cmdstan_model("stan/normal_regression.stan")
+
+fit <- model$sample(
+  data = data_list,
+  chains = 4, parallel_chains = 4,
+  iter_warmup = 1000, iter_sampling = 1000,
+  seed = 42
+)
+
+fit$cmdstan_diagnose()
+fit$summary(variables = c("prms_alpha", "prms_beta", "prms_sigma"))
+
+# Compare directly to OLS
+cat("\n--- OLS ---\n")
+print(coef(lm_fit))
+cat("Residual SE:", sigma(lm_fit), "\n")
+```
+
+
+
+```{r}
+draws <- fit$draws(format = "df")
+
+# Age grid for predictions
+age_grid <- seq(30, 80, length.out = 100)
+
+# For each age, compute posterior mean and predictive distribution
+pred_df <- purrr::map_dfr(age_grid, function(a) {
+  mu_draws  <- draws$prms_alpha + draws$prms_beta * a
+  # Predictive draws: add residual noise
+  y_pred    <- rnorm(length(mu_draws), mu_draws, draws$prms_sigma)
+  
+  tibble(
+    age        = a,
+    # Interval for the MEAN (parameter uncertainty only)
+    mu_lo      = quantile(mu_draws, 0.025),
+    mu_hi      = quantile(mu_draws, 0.975),
+    mu_mean    = mean(mu_draws),
+    # Predictive interval (parameter uncertainty + residual noise)
+    pred_lo    = quantile(y_pred, 0.025),
+    pred_hi    = quantile(y_pred, 0.975)
+  )
+})
+
+ggplot(pred_df, aes(x = age)) +
+  # Predictive interval (wide)
+  geom_ribbon(aes(ymin = pred_lo, ymax = pred_hi),
+              fill = "steelblue", alpha = 0.2) +
+  # Credible interval for mean (narrow)
+  geom_ribbon(aes(ymin = mu_lo, ymax = mu_hi),
+              fill = "steelblue", alpha = 0.5) +
+  # Posterior mean line
+  geom_line(aes(y = mu_mean), color = "steelblue", linewidth = 1) +
+  # Observed data
+  geom_point(data = data.frame(age = age, sbp = sbp),
+             aes(x = age, y = sbp), alpha = 0.6) +
+  # True line
+  geom_abline(intercept = alpha_true, slope = beta_true,
+              color = "red", linetype = "dashed") +
+  labs(title = "Bayesian linear regression",
+       subtitle = "Dark band = 95% CI for mean | Light band = 95% predictive interval | Red = truth",
+       x = "Age (years)", y = "Systolic BP (mmHg)")
+```
+
+## Part 2
+
+```{r}
+set.seed(42)
+n <- 50
+
+# True parameters
+alpha_true  <- 120   # SBP at mean age, mean BMI
+beta_age    <- 0.6   # per year of age
+beta_bmi    <- 1.2   # per unit of BMI
+sigma_true  <- 9
+
+age <- runif(n, 30, 80)
+bmi <- rnorm(n, mean = 27, sd = 4)
+sbp <- alpha_true + beta_age * age + beta_bmi * bmi +
+       rnorm(n, 0, sigma_true)
+
+# CENTRE predictors — critical step
+age_c <- age - mean(age)   # age minus mean age
+bmi_c <- bmi - mean(bmi)   # BMI minus mean BMI
+
+# OLS benchmark
+lm2 <- lm(sbp ~ age_c + bmi_c)
+summary(lm2)
+
+data_list2 <- list(N = n, age = age_c, bmi = bmi_c, sbp = sbp)
+```
+
+```{r}
+model <- cmdstan_model("stan/normal_regression_p2.stan")
+fit <- model$sample(data = data_list2,seed = 42,chains = 4,parallel_chains = 4,iter_warmup = 1000,iter_sampling = 1000)
+
+fit$draws(variables = "prms_alpha",format = "df")
+```
+
+```{r}
+fit$summary()
+```
+
+## Exp 3 Lopgistic
+```{r}
+set.seed(123)
+n <- 40
+
+# True parameters
+alpha_true <- -7.0
+beta_true  <-  0.25
+# At apache=28: logit=0, p=0.50
+# At apache=10: p≈0.01 (healthy, almost all survive)
+# At apache=45: p≈0.99 (critically ill, almost all die)
+
+apache <- runif(n, min = 10, max = 45)
+p_true <- plogis(alpha_true + beta_true * apache)
+y      <- rbinom(n, size = 1, prob = p_true)
+
+# Inspect the separation
+df <- data.frame(apache = apache, y = y,
+                 group = ifelse(apache > 30, "High (>30)", "Low (≤30)"))
+table(df$y, df$group)
+
+# Frequentist benchmark — watch what happens
+glm_fit <- glm(y ~ apache, family = binomial)
+summary(glm_fit)
+
+list(N = n, apache = apache, y = y)
+```
+
+```{r}
+model <- cmdstan_model("stan/logistic_reg.stan")
+fit_flat <- model$sample(data = list(N = n, apache = apache, y = y, sigma_alpha = 100, sigma_beta = 100),
+                    seed = 42,
+                    chains = 4,
+                    parallel_chains = 4, 
+                    iter_warmup = 1000, 
+                    iter_sampling = 1000
+                    )
+
+fit_wi <- model$sample(data = list(N = n, apache = apache, y = y, sigma_alpha = 10, sigma_beta = 2.5),
+                    seed = 42,
+                    chains = 4,
+                    parallel_chains = 4, 
+                    iter_warmup = 1000, 
+                    iter_sampling = 1000
+                    )
+
+fit_flat$cmdstan_diagnose()
+fit_wi$cmdstan_diagnose()
+
+fit_flat$summary(variables = c("prms_alpha","prms_beta"))
+fit_wi$summary(variables = c("prms_alpha","prms_beta")) 
+```
+
+
+```{r}
+beta_flat <- fit_flat$draws("prms_beta", format = "df") |> pull()
+beta_wi   <- fit_wi$draws("prms_beta", format = "df") |> pull()
+
+bind_rows(
+  data.frame(beta = beta_flat, model = "Flat prior N(0,100²)"),
+  data.frame(beta = beta_wi,   model = "Weakly informative N(0,2.5²)")
+) |>
+  ggplot(aes(x = beta, fill = model)) +
+  geom_density(alpha = 0.5) +
+  geom_vline(xintercept = beta_true, linetype = "dashed", color = "black") +
+  coord_cartesian(xlim = c(-1, 50)) +
+  labs(title = "Posterior for beta: flat vs. weakly informative prior",
+       subtitle = "Black dashed = true beta (0.25)",
+       x = "beta (log-odds per APACHE unit)", y = "Density")
+```
+
+
+```{r}
+apache_grid <- seq(10, 45, length.out = 200)
+
+# Get posterior draws for predicted probabilities
+get_prob_ribbon <- function(fit, label) {
+  draws <- fit$draws(c("prms_alpha", "prms_beta"), format = "df")
+  
+  purrr::map_dfr(apache_grid, function(a) {
+    p_draws <- plogis(draws$prms_alpha + draws$prms_beta * a)
+    tibble(
+      apache = a,
+      p_mean = mean(p_draws),
+      p_lo   = quantile(p_draws, 0.025),
+      p_hi   = quantile(p_draws, 0.975),
+      model  = label
+    )
+  })
+}
+
+ribbon_flat <- get_prob_ribbon(fit_flat, "Flat prior")
+ribbon_wi   <- get_prob_ribbon(fit_wi,   "Weakly informative")
+
+bind_rows(ribbon_flat, ribbon_wi) |>
+  ggplot(aes(x = apache, fill = model, color = model)) +
+  geom_ribbon(aes(ymin = p_lo, ymax = p_hi), alpha = 0.2, color = NA) +
+  geom_line(aes(y = p_mean), linewidth = 1) +
+  geom_point(data = data.frame(apache = apache, y = y),
+             aes(x = apache, y = y), inherit.aes = FALSE,
+             alpha = 0.6, size = 2) +
+  # True curve
+  stat_function(fun = function(a) plogis(alpha_true + beta_true * a),
+                color = "black", linetype = "dashed", linewidth = 1) +
+  labs(title = "Predicted mortality probability by APACHE II score",
+       subtitle = "Shaded = 95% credible band | Black dashed = truth",
+       x = "APACHE II Score", y = "P(30-day mortality)")
+```
+
+
+## Experiment 5
+
+
+```{r}
+set.seed(42)
+n <- 80
+
+# Severity score (centred)
+severity <- rnorm(n, mean = 0, sd = 1)
+
+# True parameters
+alpha_true <- 1.2    # log mean ADEs at average severity
+beta_true  <- 0.5    # log-linear effect of severity
+phi_true   <- 2.0    # overdispersion: Var(Y) = mu + mu²/phi
+
+# True mean
+mu_true <- exp(alpha_true + beta_true * severity)
+
+# True DGP: Negative Binomial (NOT Poisson)
+y <- rnbinom(n, mu = mu_true, size = phi_true)
+
+cat("Observed mean:", round(mean(y), 2), "\n")
+cat("Observed variance:", round(var(y), 2), "\n")
+cat("Variance/Mean ratio:", round(var(y)/mean(y), 2),
+    "  (Poisson predicts 1.0)\n")
+
+# Frequentist benchmark
+glm_pois <- glm(y ~ severity, family = poisson)
+summary(glm_pois)
+
+data_list <- list(N = n, y = y, severity = severity)
+```
+
+
+```{r}
+library(cmdstanr)
+
+model_pois <- cmdstan_model(stan_file = "stan/poisson_reg.stan")
+model_negBinom <- cmdstan_model(stan_file = "stan/negbinom.stan")
+
+fit_pois <- model_pois$sample(data = data_list,
+                              chains = 4, 
+                              parallel_chains = 4,
+                              iter_warmup = 1000,
+                              iter_sampling = 2000,
+                              seed = 42)
+
+fit_negBinom <- model_negBinom$sample(data = data_list,
+                                      chains = 4, 
+                                      parallel_chains = 4,
+                                      iter_warmup = 1000,
+                                      iter_sampling = 2000,
+                                      seed = 42)
+```
+
+
+```{r}
+fit_pois$cmdstan_diagnose()
+fit_negBinom$cmdstan_diagnose()
+```
+
+
+```{r}
+fit_pois$summary(variables = c("prms_alpha","prms_beta"))
+```
+
+```{r}
+fit_negBinom$summary(variables = c("prms_alpha","prms_beta","phi"))
+```
+
+
+```{r}
+library(bayesplot)
+library(posterior)
+
+y_rep_pois <- fit_pois$draws(variables = "y_rep", format = "matrix")
+y_rep_nb <- fit_pois$draws(variables = "y_rep", format = "matrix")
+```
+
+
+
+```{r}
+library(ggplot2)
+# Plot 1: Distribution overlay — does the model reproduce observed counts?
+p1 <- ppc_dens_overlay(y, y_rep_pois[1:50,]) +
+  ggtitle("Poisson: posterior predictive vs. observed")
+```
+
+
+```{r}
+p2 <- ppc_dens_overlay(y, y_rep_nb[1:50,]) +
+  ggtitle("NegBin: posterior predictive vs. observed")
+```
+
+
+```{r}
+gridExtra::grid.arrange(p1, p2, ncol = 2)
+
+# Plot 2: Test statistic — variance/mean ratio
+# Poisson should fail here: it always predicts ratio ≈ 1
+ppc_stat(y, y_rep_pois, stat = function(y) var(y)/mean(y)) +
+  ggtitle("Poisson: posterior predictive variance/mean ratio") +
+  geom_vline(xintercept = var(y)/mean(y), color = "red")
+
+ppc_stat(y, y_rep_nb, stat = function(y) var(y)/mean(y)) +
+  ggtitle("NegBin: posterior predictive variance/mean ratio") +
+  geom_vline(xintercept = var(y)/mean(y), color = "red")
+```
+
+
+
+
+```{r}
+# Test 1: Maximum count — overdispersion creates heavy tails
+ppc_stat(y, y_rep_pois, stat = "max") +
+  ggtitle("Poisson: max count")
+
+ppc_stat(y, y_rep_nb, stat = "max") +
+  ggtitle("NegBin: max count")
+
+# Test 2: Proportion of zeros
+ppc_stat(y, y_rep_pois,
+         stat = function(y) mean(y == 0)) +
+  ggtitle("Poisson: proportion zeros")
+
+ppc_stat(y, y_rep_nb,
+         stat = function(y) mean(y == 0)) +
+  ggtitle("NegBin: proportion zeros")
+
+# Test 3: Standard deviation (more sensitive than variance/mean for this)
+ppc_stat(y, y_rep_pois, stat = "sd") +
+  ggtitle("Poisson: SD")
+
+ppc_stat(y, y_rep_nb, stat = "sd") +
+  ggtitle("NegBin: SD")
+```
+
+
+```{r}
+# 1. Phi posterior — is it near 2 or near 100?
+fit_negBinom$summary(variables = c("prms_alpha", "prms_beta", "phi"))
+
+# 2. LOO comparison
+library(loo)
+loo_pois <- fit_pois$loo()
+loo_nb   <- fit_negBinom$loo()
+print(loo_pois)
+print(loo_nb)
+loo_compare(loo_pois, loo_nb)
+
+# 3. Run the max/sd/zero tests above
+```
+
+
+## Experiment 6
+
+```{r}
+set.seed(42)
+J     <- 8
+n_j   <- c(15, 20, 25, 30, 50, 75, 100, 150)  # patients per site
+N     <- sum(n_j)
+
+# True parameters (unknown to analyst)
+mu_true    <- 8.0    # average treatment effect (mmHg reduction)
+tau_true   <- 5.0    # between-site SD (sites genuinely differ)
+sigma_true <- 10.0   # within-site residual SD
+
+# True site effects
+theta_true <- rnorm(J, mean = mu_true, sd = tau_true)
+cat("True site effects:\n")
+print(round(theta_true, 2))
+
+# Patient-level data
+site <- rep(1:J, times = n_j)
+y    <- rnorm(N, mean = theta_true[site], sd = sigma_true)
+
+# Raw (no-pool) estimates per site
+raw_means <- tapply(y, site, mean)
+raw_ses   <- tapply(y, site, function(x) sd(x)/sqrt(length(x)))
+
+cat("\nRaw site estimates (no pooling):\n")
+print(data.frame(
+  site    = 1:J,
+  n       = n_j,
+  raw_mean = round(raw_means, 2),
+  raw_se   = round(raw_ses, 2),
+  true_theta = round(theta_true, 2)
+))
+
+data_list <- list(N = N, J = J, site = site, y = y, n_j = n_j)
+str(data_list)
+```
+
+
+```{r}
+library(cmdstanr)
+mod_np <- cmdstan_model("stan/no_pool.stan")
+mod_cp <- cmdstan_model("stan/complete_pool.stan")
+mod_h <- cmdstan_model("stan/hierarchical.stan")
+
+fit_np <- mod_np$sample(data = data_list, 
+                        chains = 4,
+                        parallel_chains = 4,
+                        seed = 42,
+                        iter_warmup = 1000,
+                        iter_sampling = 2000)
+fit_cp <- mod_cp$sample(data = data_list, 
+                        chains = 4,
+                        parallel_chains = 4,
+                        seed = 42,
+                        iter_warmup = 1000,
+                        iter_sampling = 2000)
+fit_h <- mod_h$sample(data = data_list, 
+                        chains = 4,
+                        parallel_chains = 4,
+                        seed = 42,
+                        iter_warmup = 1000,
+                        iter_sampling = 2000)
+```
+
+
+```{r}
+fit_np$cmdstan_diagnose()
+fit_cp$cmdstan_diagnose()
+fit_h$cmdstan_diagnose()
+```
+
+
+```{r}
+fit_h$summary(variables = c("mu", "tau", "sigma", "theta"))
+```
+
+
+```{r}
+library(posterior)
+library(dplyr)
+library(ggplot2)
+
+# Extract hierarchical site posteriors
+h_draws    <- fit_h$draws(format = "df")
+np_draws   <- fit_np$draws(format = "df")
+cp_draws   <- fit_cp$draws(format = "df")
+
+# Posterior means per site
+h_means  <- colMeans(h_draws[, paste0("theta[", 1:J, "]")])
+np_means <- colMeans(np_draws[, paste0("theta[", 1:J, "]")])
+cp_mean  <- mean(cp_draws$mu)
+
+# Build comparison dataframe
+shrinkage_df <- data.frame(
+  site        = 1:J,
+  n           = n_j,
+  no_pool     = np_means,
+  hier        = h_means,
+  complete    = cp_mean,
+  truth       = theta_true
+)
+
+# Shrinkage factor: how far did partial pooling move from no-pool toward complete-pool?
+shrinkage_df$B <- (shrinkage_df$no_pool - shrinkage_df$hier) /
+                  (shrinkage_df$no_pool - shrinkage_df$complete)
+
+print(round(shrinkage_df, 3))
+
+# Plot: the shrinkage picture
+ggplot(shrinkage_df, aes(x = reorder(factor(site), n))) +
+  # Raw (no-pool) estimates
+  geom_point(aes(y = no_pool, size = n),
+             color = "red", alpha = 0.8) +
+  # Hierarchical estimates
+  geom_point(aes(y = hier, size = n),
+             color = "steelblue", alpha = 0.8) +
+  # Arrows showing shrinkage direction
+  geom_segment(aes(xend = reorder(factor(site), n),
+                   y = no_pool, yend = hier),
+               arrow = arrow(length = unit(0.2, "cm")),
+               color = "gray40") +
+  # Complete pooling line
+  geom_hline(yintercept = cp_mean,
+             linetype = "dashed", color = "orange", linewidth = 1) +
+  # True values
+  geom_point(aes(y = truth), shape = 4, size = 4,
+             color = "black", stroke = 2) +
+  scale_size_continuous(name = "n per site", range = c(2, 6)) +
+  labs(title = "Shrinkage: from no-pool (red) to hierarchical (blue)",
+       subtitle = "Orange dashed = complete pool | X = true theta_j | Sites ordered by sample size",
+       x = "Site (ordered by sample size)",
+       y = "Estimated treatment effect (mmHg)") +
+  coord_flip()
+```
+
+```{r}
+library(loo)
+
+loo_np <- fit_np$loo()
+loo_cp <- fit_cp$loo()
+loo_h  <- fit_h$loo()
+
+print(loo_np)
+print(loo_cp)
+print(loo_h)
+
+loo_compare(loo_np, loo_cp, loo_h)
+```
+
+
+## Experiment 7
+
+```{r}
+set.seed(7)
+J      <- 12
+n_j    <- c(30, 40, 45, 50, 55, 60, 70, 80, 100, 120, 150, 200)
+N      <- sum(n_j)
+
+# True parameters
+mu_alpha_true  <- -1.5   # log-odds of death at average hospital (~18% baseline)
+tau_true       <- 0.8    # between-hospital SD on log-odds scale
+beta_true      <- 1.2    # effect of severity score (centred)
+
+# True hospital random intercepts
+alpha_j_true <- rnorm(J, mean = mu_alpha_true, sd = tau_true)
+cat("True hospital intercepts (log-odds):\n")
+cat(round(alpha_j_true, 2), "\n")
+cat("Implied baseline mortality rates:\n")
+cat(round(plogis(alpha_j_true) * 100, 1), "%\n")
+
+# Patient-level data
+hospital  <- rep(1:J, times = n_j)
+severity  <- rnorm(N, mean = 0, sd = 1)   # already centred
+log_odds  <- alpha_j_true[hospital] + beta_true * severity
+p_true    <- plogis(log_odds)
+y         <- rbinom(N, 1, p_true)
+
+# Raw hospital mortality rates (unadjusted)
+raw_rate <- tapply(y, hospital, mean)
+raw_n    <- tapply(y, hospital, length)
+cat("\nRaw mortality rates by hospital:\n")
+print(data.frame(
+  hospital = 1:J,
+  n        = n_j,
+  deaths   = tapply(y, hospital, sum),
+  raw_rate = round(raw_rate, 3)
+))
+
+data_list <- list(
+  N        = N,
+  J        = J,
+  hospital = hospital,
+  severity = severity,
+  y        = y
+)
+
+str(data_list)
+```
+
+
+```{r}
+library(cmdstanr)
+
+model <- cmdstan_model("stan/hier_logistic.stan")
+
+fit <- model$sample(data = data_list,
+                    chains = 4,
+                    parallel_chains = 4,
+                    iter_warmup = 1e3,
+                    iter_sampling = 2e3,
+                    seed = 42,
+                    adapt_delta = .95)
+
+fit$cmdstan_diagnose()
+```
+
+
+```{r}
+fit$summary(variables = c("mu_alpha", "tau", "prms_beta", "alpha", "p_hospital"))
+```
+
+```{r}
+library(posterior)
+
+draws <- fit$draws(format = "df")
+tau_draws <- draws$tau
+
+# Posterior distribution of ICC
+icc_draws <- tau_draws^2 / (tau_draws^2 + (pi^2 / 3))
+
+cat("ICC summary:\n")
+cat(sprintf("  Mean:   %.3f\n", mean(icc_draws)))
+cat(sprintf("  Median: %.3f\n", median(icc_draws)))
+cat(sprintf("  90%% CI: [%.3f, %.3f]\n",
+            quantile(icc_draws, 0.05),
+            quantile(icc_draws, 0.95)))
+
+# Interpretation guide
+cat("\nICC interpretation:\n")
+cat("  < 0.05 : negligible hospital effect\n")
+cat("  0.05-0.15: modest\n")
+cat("  > 0.15 : substantial — hospital matters a lot\n")
+```
+
+```{r}
+library(dplyr)
+library(ggplot2)
+
+# Extract posterior means for each hospital's baseline mortality
+p_means  <- colMeans(draws[, paste0("p_hospital[", 1:J, "]")])
+p_lower  <- apply(draws[, paste0("p_hospital[", 1:J, "]")], 2, quantile, 0.025)
+p_upper  <- apply(draws[, paste0("p_hospital[", 1:J, "]")], 2, quantile, 0.975)
+
+# Population mean mortality
+mu_alpha_mean <- mean(draws$mu_alpha)
+pop_mean_p    <- plogis(mu_alpha_mean)
+
+# Build funnel limits using Poisson approximation
+precision_seq <- seq(10, 220, by = 5)
+funnel_df <- data.frame(
+  n     = precision_seq,
+  upper2 = pop_mean_p + 2 * sqrt(pop_mean_p * (1 - pop_mean_p) / precision_seq),
+  lower2 = pop_mean_p - 2 * sqrt(pop_mean_p * (1 - pop_mean_p) / precision_seq),
+  upper3 = pop_mean_p + 3 * sqrt(pop_mean_p * (1 - pop_mean_p) / precision_seq),
+  lower3 = pop_mean_p - 3 * sqrt(pop_mean_p * (1 - pop_mean_p) / precision_seq)
+)
+
+hosp_df <- data.frame(
+  hospital = 1:J,
+  n        = n_j,
+  p_mean   = p_means,
+  p_lower  = p_lower,
+  p_upper  = p_upper,
+  raw_rate = raw_rate
+)
+
+ggplot() +
+  # Funnel limits
+  geom_ribbon(data = funnel_df,
+              aes(x = n, ymin = lower3, ymax = upper3),
+              fill = "lightyellow", alpha = 0.8) +
+  geom_ribbon(data = funnel_df,
+              aes(x = n, ymin = lower2, ymax = upper2),
+              fill = "lightblue", alpha = 0.6) +
+  # Population mean
+  geom_hline(yintercept = pop_mean_p,
+             color = "steelblue", linetype = "dashed", linewidth = 1) +
+  # Hospital estimates with credible intervals
+  geom_errorbar(data = hosp_df,
+                aes(x = n, ymin = p_lower, ymax = p_upper),
+                width = 3, color = "gray50") +
+  geom_point(data = hosp_df,
+             aes(x = n, y = p_mean, size = n),
+             color = "steelblue", alpha = 0.9) +
+  # Raw rates (unadjusted) for comparison
+  geom_point(data = hosp_df,
+             aes(x = n, y = raw_rate),
+             shape = 4, size = 3, color = "red", stroke = 1.5) +
+  geom_label(data = hosp_df,
+             aes(x = n, y = p_mean, label = hospital),
+             nudge_y = 0.02, size = 3) +
+  scale_y_continuous(labels = scales::percent_format()) +
+  labs(
+    title    = "Funnel Plot: Hospital Mortality Rates",
+    subtitle = "Blue dots = Bayesian (risk-adjusted) | Red X = raw rate | Bands = 2σ, 3σ",
+    x        = "Hospital size (n)",
+    y        = "30-day mortality rate",
+    size     = "n"
+  )
+```
+
+```{r}
+# Compare raw vs Bayesian-adjusted rates
+comparison <- data.frame(
+  hospital = 1:J,
+  n        = n_j,
+  raw_rate = round(raw_rate, 3),
+  bayes_rate = round(p_means, 3),
+  shrinkage  = round(raw_rate - p_means, 3)
+) |> arrange(n)
+
+print(comparison)
+
+# Visualise
+ggplot(comparison, aes(y = reorder(factor(hospital), n))) +
+  geom_segment(aes(x = raw_rate, xend = bayes_rate,
+                   yend = reorder(factor(hospital), n)),
+               arrow = arrow(length = unit(0.2,"cm")),
+               color = "gray40") +
+  geom_point(aes(x = raw_rate), color = "red", size = 3) +
+  geom_point(aes(x = bayes_rate, size = n), color = "steelblue") +
+  geom_vline(xintercept = pop_mean_p,
+             linetype = "dashed", color = "orange") +
+  scale_x_continuous(labels = scales::percent_format()) +
+  labs(title = "Shrinkage of Hospital Mortality Rates",
+       subtitle = "Red = raw rate | Blue = Bayesian adjusted | Orange = population mean",
+       x = "30-day mortality rate", y = "Hospital (ordered by size)")
+```
+
+## Experiment 10
+
+```{r}
+set.seed(10)
+J      <- 8
+n_j    <- c(30, 40, 50, 60, 70, 80, 100, 120)
+N      <- sum(n_j)
+
+# True parameters
+mu_alpha_true  <- 1.5    # log mean readmissions at avg hospital
+tau0_true      <- 0.6    # between-hospital SD in intercepts
+beta_true      <- 0.4    # severity effect (log scale)
+tau1_true      <- 0.2    # between-hospital SD in severity slope
+phi_true       <- 3.0    # NegBin overdispersion
+
+# True random effects
+u0_true <- rnorm(J, 0, tau0_true)
+u1_true <- rnorm(J, 0, tau1_true)
+
+# Patient data
+hospital <- rep(1:J, times = n_j)
+severity <- rnorm(N, 0, 1)
+
+log_mu   <- (mu_alpha_true + u0_true[hospital]) +
+            (beta_true     + u1_true[hospital]) * severity
+mu_true  <- exp(log_mu)
+y        <- rnbinom(N, size = phi_true, mu = mu_true)
+
+cat("Outcome summary:\n")
+print(summary(y))
+cat(sprintf("\nVariance/Mean ratio: %.2f  (>1 confirms overdispersion)\n",
+            var(y)/mean(y)))
+cat("\nHospital-level means:\n")
+print(round(tapply(y, hospital, mean), 2))
+
+data_list <- list(N=N, J=J, hospital=hospital, severity=severity, y=y)
+str(data_list)
+```
+
+
+```{r}
+# Simulate from priors alone
+n_sim     <- 500
+mu_a_sim  <- rnorm(n_sim, 0, 2.5)
+tau_sim   <- abs(rnorm(n_sim, 0, 1))
+beta_sim  <- rnorm(n_sim, 0, 1)
+phi_sim   <- rexp(n_sim, 1)
+u0_sim    <- rnorm(n_sim, 0, 1)
+
+# Implied count for one patient at average severity
+alpha_j   <- mu_a_sim + tau_sim * u0_sim
+mu_sim    <- exp(alpha_j)
+y_prior   <- rnbinom(n_sim, size = phi_sim, mu = mu_sim)
+
+cat("Prior predictive summary:\n")
+print(quantile(y_prior, c(0.01, 0.10, 0.50, 0.90, 0.99)))
+
+# Flag if prior allows absurd counts
+cat(sprintf("\nP(y > 100): %.3f\n", mean(y_prior > 100)))
+cat(sprintf("P(y > 1000): %.3f\n", mean(y_prior > 1000)))
+
+hist(pmin(y_prior, 50), breaks = 30,
+     main = "Prior predictive: readmission counts (capped at 50)",
+     xlab = "Count")
+```
+
+
+```{r}
+library(cmdstanr)
+
+mod1 <- cmdstan_model("stan/m1_pooled_nb.stan")
+mod2 <- cmdstan_model("stan/m2_hier_int_nb.stan")
+mod3 <- cmdstan_model("stan/m3_hier_slopes_nb.stan")
+
+fit1 <- mod1$sample(data = c(data_list[c("N","severity","y")]),
+          chains=4, parallel_chains=4,
+          iter_warmup=1000, iter_sampling=2000, seed=10)
+
+fit2 <- mod2$sample(data = data_list,
+          chains=4, parallel_chains=4,
+          iter_warmup=1000, iter_sampling=2000,
+          adapt_delta=0.90, seed=10)
+
+fit3 <- mod3$sample(data = data_list,
+          chains=4, parallel_chains=4,
+          iter_warmup=1000, iter_sampling=2000,
+          adapt_delta=0.95, seed=10)
+```
+
+
+
+```{r}
+# Run for all three
+for (fit in list(fit1, fit2, fit3)) {
+  fit$cmdstan_diagnose()
+}
+
+# Detailed check for most complex model
+fit3$summary(variables = c("mu_alpha","mu_beta","tau","phi","rho")) |>
+  dplyr::select(variable, mean, sd, rhat, ess_bulk, ess_tail) 
+
+# Acceptance rates and tree depth
+fit3$sampler_diagnostics() |>
+  posterior::as_draws_df() |>
+  dplyr::summarise(
+    mean_accept  = mean(accept_stat__),
+    max_treedepth = max(treedepth__),
+    divergences  = sum(divergent__)
+  ) 
+```
+
+```{r}
+library(bayesplot)
+
+# Extract y_rep from all models
+y_rep1 <- fit1$draws("y_rep", format="matrix")
+y_rep2 <- fit2$draws("y_rep", format="matrix")
+y_rep3 <- fit3$draws("y_rep", format="matrix")
+
+# PPC 1: Density overlay
+p1 <- ppc_dens_overlay(y, y_rep2[1:100, ]) +
+      ggtitle("M2: Density overlay")
+
+# PPC 2: Test statistics — three quantities
+ppc_stat(y, y_rep2, stat="mean")   + ggtitle("M2: Mean")
+ppc_stat(y, y_rep2, stat="sd")     + ggtitle("M2: SD")
+ppc_stat(y, y_rep2, stat="max")    + ggtitle("M2: Max")
+
+# PPC 3: Zero counts (common failure mode for count models)
+prop_zero <- function(x) mean(x == 0)
+ppc_stat(y, y_rep2, stat=prop_zero) + ggtitle("M2: Proportion zeros")
+
+# PPC 4: By hospital (crucial for hierarchical model)
+ppc_stat_grouped(y, y_rep2[1:500, ],
+                 group = hospital,
+                 stat  = "mean") +
+  ggtitle("M2: Mean by hospital")
+```
+
+```{r}
+library(loo)
+
+loo1 <- fit1$loo()
+loo2 <- fit2$loo()
+loo3 <- fit3$loo()
+
+print(loo1); print(loo2); print(loo3)
+
+comparison <- loo_compare(loo1, loo2, loo3)
+print(comparison)
+
+# Visualise Pareto-k for best model
+plot(loo3, diagnostic = "k",
+     main = "Pareto-k: Model 3")
+abline(h = c(0.5, 0.7), lty = 2, col = c("orange","red"))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+

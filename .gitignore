@@ -1,0 +1,16 @@
+# compiled Stan executables
+stan/*
+!stan/*.stan
+*.exe
+
+# R / RStudio / Quarto
+.Rproj.user/
+.Rhistory
+.RData
+.RDataTmp
+.Ruserdata
+*_cache/
+*_files/
+.quarto/
+
+.DS_Store
